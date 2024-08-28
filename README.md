@@ -13,6 +13,37 @@ a slightly cut-down version of the "Star Trek: Strange New Worlds" intro
 for the demo video.  Since the frame size is smaller, there was no need
 to reduce the color resolution, and I left the video as full color.
 
+# Hardware
+
+From looking at the schematic, the pinout for the side connector (along with
+the color of the breakout cable wire) is
+
+* GND - gray
+* 3V3 - blue
+* GPIO26 (SCA1) - orange
+* GPIO27 (SCL1) - red
+* GPIO28 - yellow
+* GPIO29 - green
+
+If you're connecting this as a SAO, you want to have this pinout
+
+```
++-----      --------+
+| 3V3   SDA   GPIO1 |
+| GND   SCL   GPIO2 |
++-------------------+
+```
+so my suggestion is GND to GND, 3V3 to 3V3, GPIO26 to SDA, GPIO27 to SCL,
+GPIO28 to GPIO1, and GPIO29 to GPIO2.
+
+# Performance
+
+As currently configured, this program runs the RP2040 at 275Mhz, a bit over
+twice it's standard speed. If you're using this for a SAO, you should reduce
+the clock rate to 125Mhz. In my testing, that resulted in a frame rate under
+30fps, but allowed the unit to work at 2.96V and 40mA.  At the fast clock
+speed, I wasn't able to reliably run the unit below 3.1V and 70mA.
+
 # Links
 
 * https://github.com/unwired/vector-video - my hack from SuperCon
