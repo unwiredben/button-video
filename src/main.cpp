@@ -30,7 +30,7 @@ void* my_realloc(const char* what, void* ptr, std::size_t new_size) {
 #define PLM_REALLOC(what, p, sz) my_realloc(what, p, sz)
 #include "pl_mpeg.h"
 
-#include "buttonvideo.h"
+#include "RokuCityVideo.h"
 
 constexpr int WIDTH = 128;
 constexpr int HEIGHT = 128;
@@ -174,7 +174,7 @@ void setup() {
 }
 
 void loop() {
-    play_color_video(ST_SNW_Intro_mpg, ST_SNW_Intro_mpg_len, false);
-    play_static(200);
+    play_color_video(rokucity_mpg, rokucity_mpg_len, false);
+    // play_static(200);
 }
 
