@@ -5,6 +5,8 @@
 #include <Arduino.h>
 #include <TFT_eSPI.h>
 
+#define MULTICORE 1
+
 void* my_malloc(const char* what, std::size_t size) {
     (void) what;
     Serial.print("malloc ");
@@ -35,6 +37,7 @@ void* my_realloc(const char* what, void* ptr, std::size_t new_size) {
 constexpr int WIDTH = 128;
 constexpr int HEIGHT = 128;
 
+// corresponds to approximately 30fps
 constexpr int MS_PER_FRAME = 33;
 
 uint32_t pwm_slice_num;
@@ -95,6 +98,10 @@ void show_color_frame(plm_frame_t *frame) {
     tft.endWrite();
 }
 
+#if MULTICORE
+plm_frame_t* volatile display_frame = nullptr;
+#endif
+
 void play_color_video(uint8_t const* data, size_t len, bool loop) {
     plm_t *plm =
         plm_create_with_memory(
@@ -105,7 +112,9 @@ void play_color_video(uint8_t const* data, size_t len, bool loop) {
     plm_set_audio_enabled(plm, false);
     plm_set_loop(plm, loop);
 
+#if !MULTICORE
     auto last_time = millis();
+#endif
 
     // Decode forever until power is removed
     while (true) {
@@ -113,68 +122,73 @@ void play_color_video(uint8_t const* data, size_t len, bool loop) {
         while (buttonHeld()) {}
 
         auto *frame = plm_decode_video(plm);
-        if (frame) show_color_frame(frame);
+#if MULTICORE
+        if (frame) {
+            // simple spinlock to wait for display_frame
+            // to be set to nullptr to allow setting next frame
+            while (display_frame != nullptr) {}
+            display_frame = frame;
+        }
+#else
+        if (frame) {
+            show_color_frame(frame);
+        }
 
         auto now = millis();
         if (now - last_time < MS_PER_FRAME) {
             delay(MS_PER_FRAME - (now - last_time));
         }
         last_time = now;
-
+#endif
         // if not looping, NULL frame means end
         if (!loop && !frame) break;
     }
     plm_destroy(plm);
 }
 
-inline int16_t convertPixel(int16_t luma) {
-    return tft.color565(luma, luma, luma);
+void setup() {
+    delay(1000);
+    Serial.begin(115200);
+    Serial.println("Starting...");
+
+    tft.init();
+    tft.setRotation(2);
+    tft.fillScreen(TFT_BLACK);
+
+    play_color_video(rokucity_mpg, rokucity_mpg_len, true);
 }
 
-void show_static_frame() {
-    tft.startWrite();
-    tft.setAddrWindow(0, 0, WIDTH, HEIGHT);
-    int i = 0;
-    for (int y = 0; y < HEIGHT; ++y) {
-        for (int x = 0; x < WIDTH; ++x) {
-            uint32_t luma = random(256);
-            tft.pushColor(convertPixel(luma));
-        }
-    }
-    tft.endWrite();
+void loop() {
+    // should never be called
 }
 
-void play_static(int msDuration) {
-    auto now = millis();
-    auto last_time = now;
-    auto endTime = now + msDuration;
-    while ((now = millis()) < endTime
-        || buttonHeld()) {
-        show_static_frame();
+#if MULTICORE
+
+void setup1() {
+    auto last_time = millis();
+
+    while (1) {
+        // simple spinlock to wait for display_frame
+        // to be set to value to allow showing frame
+        while (display_frame == nullptr) {}
+
+        auto frame = display_frame;
+        show_color_frame(frame);
+
+        // allow decoder to set the next frame even
+        // if we're waiting for timing purposes
+        display_frame = nullptr;
+
+        auto now = millis();
         if (now - last_time < MS_PER_FRAME) {
             delay(MS_PER_FRAME - (now - last_time));
         }
         last_time = now;
     }
-    tft.fillScreen(TFT_BLACK);
 }
 
-bool demo_mode = false;
-
-void setup() {
-    // pwm_setup();
-    // set_bl_pwn(20);
-
-    Serial.begin(19200);
-    Serial.println("starting on Pico");
-
-    tft.init();
-    tft.setRotation(2);
-    tft.fillScreen(TFT_BLACK);
+void loop1() {
+    // should never be called
 }
 
-void loop() {
-    play_color_video(rokucity_mpg, rokucity_mpg_len, false);
-    // play_static(200);
-}
-
+#endif
